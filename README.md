@@ -1,4 +1,4 @@
 aminda
 ======
 
-Building blocks for volumetric binary labeling.
+Multi-view surface reconsruction.
