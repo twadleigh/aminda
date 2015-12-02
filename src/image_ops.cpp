@@ -20,10 +20,10 @@ void map_to_plane(
     for (int i = 0; i < tnx; ++i) {
       float *_tgt = tgt + i*tdx + j*tdy;
 
-      vec3f p = mvmult(hom, vec3f(float(i)+0.5,float(j)+0.5,1.0));
-      float x = p[0]/p[2];
-      float y = p[1]/p[2];
-      if (x > 0.0f && x < snx && y > 0.0f && y < sny) {
+      vec3f p = mvmult(hom, vec3f(float(i)+0.5f, float(j)+0.5f, 1.0f));
+      float x = p[0]/p[2] - 0.5f;
+      float y = p[1]/p[2] - 0.5f;
+      if (x > 0.0f && x < snx-1 && y > 0.0f && y < sny-1) {
         int xlo(x), ylo(y);
         float bx = x-float(xlo); float ax = 1.0f-bx;
         float by = y-float(ylo); float ay = 1.0f-by;
@@ -44,7 +44,7 @@ void map_to_plane(
 }
 
 extern "C"
-void mean_and_deviation(
+void mean_and_inverse_deviation(
   int w, int nc, int nx, int ny,
   float const *image, float *mean)
 {
@@ -52,37 +52,40 @@ void mean_and_deviation(
   int const dx = dc*nc;
   int const dy = dx*nx;
 
-  float const invScale = 1.0f/float((2*w+1)*(2*w+1));
-
 #pragma omp parallel for
   for (int j = w; j < ny-w; ++j) {
     for (int i = w; i < nx-w; ++i) {
       float *_mean = mean + i*dx + j*dy;
 
       // accumulate mean
+      float wt = 0.0f;
       for (int jj = j-w; jj <= j+w; ++jj) {
         float const *_image_y = image + jj*dy;
         for (int ii = i-w; ii <= i+w; ++ii) {
           float const *_image = _image_y + ii*dx;
+          wt += _image[0];
           for (int c = 1; c < nc; ++c) {
             _mean[c] += _image[c];
           }
         }
       }
-      for (int c = 1; c < nc; ++c) _mean[c] *= invScale;
+      wt = wt > 1.0 ? 1.0f / wt : 1.0;
+      for (int c = 1; c < nc; ++c) _mean[c] *= wt;
 
       // accumulate deviation
       for (int jj = j-w; jj <= j+w; ++jj) {
         float const *_image_y = image + jj*dy;
         for (int ii = i-w; ii <= i+w; ++ii) {
           float const *_image = _image_y + ii*dx;
+          float w = _image[0];
           for (int c = 1; c < nc; ++c) {
-            float diff = _image[c] - _mean[c];
+            float diff = w * (_image[c] - _mean[c]);
             _mean[0] += diff*diff;
           }
         }
       }
       _mean[0] = sqrt(_mean[0]);
+      _mean[0] = _mean[0] > 1.0e-3 ? 1.0f / _mean[0] : 1.0e3;
     }
   }
 }
@@ -103,27 +106,27 @@ void normalized_cross_correlation(
 
       float const *_mn1 = mn1+_ix;
       float const *_mn2 = mn2+_ix;
-      float const *_im1 = im1+_ix;
-      float const *_im2 = im2+_ix;
+      float const *_i1 = im1+_ix;
+      float const *_i2 = im2+_ix;
 
-      if(_im1[0] == 0.0f || _im2[0] == 0.0f) {
-        nxcorr[ix] = -1.0f;
-      } else {
-        nxcorr[ix] = 0.0f;
+      if(_i1[0] > 0.0f && _i2[0] > 0.0f) {
+        float nxc = 0.0f;
         for (int jj = j-w; jj <= j+w; ++jj) {
           int ojj = jj*dy;
           float const *_im1jj = im1 + ojj;
           float const *_im2jj = im2 + ojj;
           for (int ii = i-w; ii <= i+w; ++ii) {
             int oii = ii*dx;
-            float const *_i1 = _im1jj + oii;
-            float const *_i2 = _im2jj + oii;
+            float const *_im1 = _im1jj + oii;
+            float const *_im2 = _im2jj + oii;
+            float w = _im1[0] * _im2[0];
             for (int c = 1; c < nc; ++c) {
-              nxcorr[ix] += (_i1[c] - _mn1[c]) * (_i2[c] - _mn2[c]);
+              nxc += w * (_im1[c] - _mn1[c]) * (_im2[c] - _mn2[c]);
             }
           }
         }
-        nxcorr[ix] /= mn1[0] * mn2[0];
+        nxc *= _mn1[0] * _mn2[0];
+        nxcorr[ix] = nxc;
       }
     }
   }

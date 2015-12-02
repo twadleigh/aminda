@@ -1,5 +1,7 @@
 export DepthMap
 
+import ImageView
+
 type DepthMap
   camera :: M34
   depth :: Array{Float32, 2}
@@ -10,7 +12,7 @@ function DepthMap(view, nbrs, voi, w = 3)
   cam = view.camera
   im = view.image
   (nc, nx, ny) = size(im)
-  mn = LibAminda.mean_and_deviation(im, w)
+  mn = LibAminda.mean_and_inverse_deviation(im, w)
 
   # determine depth range, resolution
   bnds = bounds(cam, voi)
@@ -30,7 +32,7 @@ function DepthMap(view, nbrs, voi, w = 3)
       cam2 = nbr.camera
       hom = Array(homography(cam, cam2, z))
       im2 = LibAminda.map_to_plane(nbr.image, hom, nx, ny)
-      mn2 = LibAminda.mean_and_deviation(im2, w)
+      mn2 = LibAminda.mean_and_inverse_deviation(im2, w)
       nxc = LibAminda.normalized_cross_correlation(im, mn, im2, mn2, w)
       nxcorr = LibAminda.maximum(nxcorr, nxc)
     end

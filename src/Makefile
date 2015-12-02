@@ -1,5 +1,5 @@
 libaminda.so : update_labeling.o image_ops.o
-	g++ -shared -fPIC -fopenmp -o $@ $^
+	g++ -shared -O3 -fPIC -fopenmp -o $@ $^
 
 %.o : %.cpp
 	g++ -c -O3 -fPIC -fopenmp -o $@ $^
